@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+
+set -e
+
+show_help() {
+  cat << EOF
+Usage: ./build [OPTIONS]
+       ./build deploy [--user USER] [HOST...]
+
+Build and manage NixOS VM.
+
+Options:
+  (none)      Rebuild the NixOS VM (default)
+  --rebuild   Rebuild the NixOS VM
+  --boot      Start the QEMU VM
+  deploy      Deploy configuration to remote host(s)
+  --user      SSH user for deployment (default: root)
+  -h, --help, help
+              Show this help message
+
+Examples:
+  ./build                           # Rebuild VM
+  ./build --boot                    # Start VM
+  ./build --rebuild --boot          # Rebuild then start VM
+  ./build deploy 192.168.1.10       # Deploy to single host as root
+  ./build deploy host1 host2        # Deploy to multiple hosts as root
+  ./build deploy --user eva host1   # Deploy as user eva
+EOF
+}
+
+rebuild() {
+  echo "Removing previous builds..."
+
+  shopt -s nullglob
+  files=(result/*)
+  if (( ${#files[@]} )); then
+    sudo rm -rf "${files[@]}"
+  fi
+
+  qcow=(*.qcow2)
+  if (( ${#qcow[@]} )); then
+    sudo rm -f "${qcow[@]}"
+  fi
+
+  echo "Rebuilding NixOS VM..."
+  sudo nix-build '<nixpkgs/nixos>' -A vm -I nixpkgs=channel:nixos-25.05 -I nixos-config=./configuration.nix
+}
+
+boot() {
+  echo "Starting QEMU VM..."
+  QEMU_KERNEL_PARAMS=console=ttyS0 ./result/bin/run-nixos-vm -nographic
+  reset
+}
+
+deploy() {
+  local ssh_user="$1"
+  shift
+  local hosts=("$@")
+
+  if [[ ${#hosts[@]} -eq 0 ]]; then
+    echo "Error: No hosts specified for deployment" >&2
+    echo "Usage: ./build deploy [--user USER] [HOST...]" >&2
+    exit 1
+  fi
+
+  local source_dir="$PWD"
+
+  # Build rsync exclude arguments from .gitignore
+  local rsync_excludes=()
+  if [[ -f "$source_dir/.gitignore" ]]; then
+    while IFS= read -r line; do
+      # Skip empty lines and comments
+      [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+      rsync_excludes+=("--exclude=$line")
+    done < "$source_dir/.gitignore"
+  fi
+
+  for host in "${hosts[@]}"; do
+    echo "========================================"
+    echo "Deploying to $host..."
+    echo "========================================"
+
+    # Copy entire directory structure to remote host
+    echo "Copying directory structure..."
+    if ! rsync -avz "${rsync_excludes[@]}" -e "ssh -o StrictHostKeyChecking=no" "$source_dir/" "${ssh_user}@${host}:/tmp/nixos-deploy/"; then
+      echo "Error: Failed to copy files to $host" >&2
+      continue
+    fi
+
+    # Move files to /etc/nixos/ and set permissions
+    echo "Installing files to /etc/nixos/..."
+    if ! ssh -o StrictHostKeyChecking=no "${ssh_user}@${host}" "sudo mkdir -p /etc/nixos && sudo rsync -a /tmp/nixos-deploy/ /etc/nixos/ && sudo chmod +x /etc/nixos/build && sudo rm -rf /tmp/nixos-deploy"; then
+      echo "Error: Failed to install files on $host" >&2
+      continue
+    fi
+
+    # Execute rebuild and boot on remote host
+    # Note: This will disconnect our SSH session, which is expected
+    echo "Executing rebuild and boot on $host..."
+    echo "(SSH connection will be terminated during reboot - this is normal)"
+
+    # Use -o ServerAliveInterval to detect connection issues faster
+    # The '|| true' ensures we don't fail if connection drops (expected behavior)
+    ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=5 "${ssh_user}@${host}" \
+      "cd /etc/nixos && sudo ./build --rebuild --boot" || true
+
+    echo "Deployment to $host initiated."
+    echo ""
+  done
+
+  echo "========================================"
+  echo "Deployment complete for all hosts."
+  echo "========================================"
+}
+
+# Parse flags
+should_rebuild=false
+should_boot=false
+should_deploy=false
+deploy_hosts=()
+deploy_user="root"
+
+# Check for deploy subcommand first
+if [[ $# -gt 0 && "$1" == "deploy" ]]; then
+  shift
+  should_deploy=true
+
+  # Parse deploy-specific options
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --user)
+        if [[ -z "$2" || "$2" == --* ]]; then
+          echo "Error: --user requires a value" >&2
+          exit 1
+        fi
+        deploy_user="$2"
+        shift 2
+        ;;
+      *)
+        deploy_hosts+=("$1")
+        shift
+        ;;
+    esac
+  done
+else
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      ''|-h|--help|help)
+        show_help
+        exit 0
+        ;;
+      --rebuild)
+        should_rebuild=true
+        shift
+        ;;
+      --boot)
+        should_boot=true
+        shift
+        ;;
+      *)
+        echo "Error: Unknown option '$1'" >&2
+        echo "Run './build --help' for usage information." >&2
+        exit 1
+        ;;
+    esac
+  done
+fi
+
+# Execute actions based on mode
+if [[ "$should_deploy" == true ]]; then
+  deploy "$deploy_user" "${deploy_hosts[@]}"
+else
+  # Execute actions in order: rebuild -> boot
+  if [[ "$should_rebuild" == true ]]; then
+    rebuild
+  fi
+
+  if [[ "$should_boot" == true ]]; then
+    boot
+  fi
+fi
