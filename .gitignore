@@ -1,2 +1,5 @@
 result
 *.qcow2
+deploy/go.sum
+deploy/deploy
+nix-deploy
