@@ -61,8 +61,8 @@ func main() {
 			},
 		},
 		Action: func(c *cli.Context) error {
-			// Default action: rebuild
-			return Rebuild()
+			// Default action: show help
+			return cli.ShowAppHelp(c)
 		},
 	}
 
