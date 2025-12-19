@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gastrodon/nix-server/build"
 	"github.com/urfave/cli/v2"
 )
 
@@ -17,14 +16,14 @@ func main() {
 				Name:  "rebuild",
 				Usage: "Rebuild the NixOS VM",
 				Action: func(c *cli.Context) error {
-					return build.Rebuild()
+					return Rebuild()
 				},
 			},
 			{
 				Name:  "boot",
 				Usage: "Start the QEMU VM",
 				Action: func(c *cli.Context) error {
-					return build.Boot()
+					return Boot()
 				},
 			},
 			{
@@ -47,7 +46,7 @@ func main() {
 					}
 
 					for _, host := range hosts {
-						if err := build.Deploy(host, user); err != nil {
+						if err := Deploy(host, user); err != nil {
 							fmt.Fprintf(os.Stderr, "Error deploying to %s: %v\n", host, err)
 							continue
 						}
@@ -63,7 +62,7 @@ func main() {
 		},
 		Action: func(c *cli.Context) error {
 			// Default action: rebuild
-			return build.Rebuild()
+			return Rebuild()
 		},
 	}
 
