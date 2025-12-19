@@ -1,4 +1,4 @@
-module github.com/gastrodon/nix-server/build
+module github.com/gastrodon/nix-server/deploy
 
 go 1.24.11
 

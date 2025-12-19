@@ -9,7 +9,7 @@ import (
 
 func main() {
 	app := &cli.App{
-		Name:  "build",
+		Name:  "deploy",
 		Usage: "Build and manage NixOS VM",
 		Commands: []*cli.Command{
 			{
