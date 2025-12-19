@@ -3,6 +3,7 @@ package build
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -52,9 +53,9 @@ func ShellScript(script string) ([]string, error) {
 // ShellInteractive runs a command interactively (inheriting stdin/stdout/stderr)
 func ShellInteractive(command string, args ...string) error {
 	cmd := exec.Command(command, args...)
-	cmd.Stdin = nil
-	cmd.Stdout = nil
-	cmd.Stderr = nil
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
 	return cmd.Run()
 }
