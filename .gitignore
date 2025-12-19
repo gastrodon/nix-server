@@ -1,4 +1,4 @@
 result
 *.qcow2
-go.sum
-nix-server
+deploy/go.sum
+nix-deploy
