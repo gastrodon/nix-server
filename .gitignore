@@ -1,2 +1,5 @@
 result
 *.qcow2
+go.sum
+nix-server
+build.sh
