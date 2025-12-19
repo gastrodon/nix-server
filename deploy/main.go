@@ -10,59 +10,35 @@ import (
 func main() {
 	app := &cli.App{
 		Name:  "deploy",
-		Usage: "Build and manage NixOS VM",
-		Commands: []*cli.Command{
-			{
-				Name:  "rebuild",
-				Usage: "Rebuild the NixOS VM",
-				Action: func(c *cli.Context) error {
-					return Rebuild()
-				},
-			},
-			{
-				Name:  "boot",
-				Usage: "Start the QEMU VM",
-				Action: func(c *cli.Context) error {
-					return Boot()
-				},
-			},
-			{
-				Name:  "deploy",
-				Usage: "Deploy configuration to remote host(s)",
-				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:    "user",
-						Aliases: []string{"u"},
-						Value:   "root",
-						Usage:   "SSH user for deployment",
-					},
-				},
-				Action: func(c *cli.Context) error {
-					user := c.String("user")
-					hosts := c.Args().Slice()
-
-					if len(hosts) == 0 {
-						return fmt.Errorf("no hosts specified for deployment")
-					}
-
-					for _, host := range hosts {
-						if err := Deploy(host, user); err != nil {
-							fmt.Fprintf(os.Stderr, "Error deploying to %s: %v\n", host, err)
-							continue
-						}
-					}
-
-					fmt.Println("========================================")
-					fmt.Println("Deployment complete for all hosts.")
-					fmt.Println("========================================")
-
-					return nil
-				},
+		Usage: "Deploy NixOS configuration to remote host(s)",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "user",
+				Aliases: []string{"u"},
+				Value:   "root",
+				Usage:   "SSH user for deployment",
 			},
 		},
 		Action: func(c *cli.Context) error {
-			// Default action: show help
-			return cli.ShowAppHelp(c)
+			user := c.String("user")
+			hosts := c.Args().Slice()
+
+			if len(hosts) == 0 {
+				return fmt.Errorf("no hosts specified for deployment")
+			}
+
+			for _, host := range hosts {
+				if err := Deploy(host, user); err != nil {
+					fmt.Fprintf(os.Stderr, "Error deploying to %s: %v\n", host, err)
+					continue
+				}
+			}
+
+			fmt.Println("========================================")
+			fmt.Println("Deployment complete for all hosts.")
+			fmt.Println("========================================")
+
+			return nil
 		},
 	}
 
